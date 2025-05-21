@@ -1,0 +1,27 @@
+[tool.poetry]
+name = "financial-ai-agent"
+version = "0.1.0"
+description = "A financial information AI agent system using multiple LLMs and Hexagonal Architecture"
+authors = ["Your Name <your.email@example.com>"]
+
+[tool.poetry.dependencies]
+python = "^3.9"
+fastapi = "^0.104.1"
+uvicorn = "^0.24.0"
+pydantic = "^2.5.2"
+openai = "^1.3.5"
+torch = "^2.1.1"
+transformers = "^4.35.2"
+stability-sdk = "^0.8.4"
+opentelemetry-api = "^1.21.0"
+opentelemetry-sdk = "^1.21.0"
+opentelemetry-instrumentation-fastapi = "^0.42b0"
+prometheus-client = "^0.19.0"
+pytest = "^7.4.4"
+pytest-asyncio = "^0.23.3"
+httpx = "^0.26.0"
+python-dotenv = "^1.0.0"
+
+[build-system]
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"

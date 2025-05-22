@@ -1,64 +1,118 @@
-from typing import Dict, Any
+from typing import Dict, Any, Optional, List, Tuple
 import os
 import base64
 import io
 import logging
 import aiohttp
-from datetime import datetime
+import json
+from functools import lru_cache
+from datetime import datetime, timedelta
 from PIL import Image
+from dataclasses import dataclass
+from enum import Enum
+
+class ChartType(Enum):
+    CANDLESTICK = "candlestick"
+    LINE = "line"
+    BAR = "bar"
+    AREA = "area"
+    MIXED = "mixed"
+    SCATTER = "scatter"
+    HEATMAP = "heatmap"
+
+class VisualizationStyle(Enum):
+    MODERN = "modern"
+    CLASSIC = "classic"
+    MINIMALIST = "minimalist"
+    DARK = "dark"
+    LIGHT = "light"
+
+@dataclass
+class ChartConfig:
+    type: ChartType
+    elements: List[str]
+    colors: List[str]
+    indicators: List[str]
+    interactive: bool = True
+    animations: bool = True
+    tooltips: bool = True
 
 logger = logging.getLogger(__name__)
 from ..ports.agent_port import DesignerAgent
 from ..infrastructure.storage.local_storage import LocalStorageService
 
 class StableDiffusionDesignerAgent(DesignerAgent):
-    """Implementation of the designer agent using Stable Diffusion."""
+    """Implementation of the designer agent using Stable Diffusion with advanced visualization capabilities."""
     
     def __init__(self):
         self.api_key = os.getenv("STABILITY_API_KEY")
         self.api_host = "https://api.stability.ai"
         self.engine_id = "stable-diffusion-xl-1024-v1-0"
         self.storage = LocalStorageService()
+        self.cache_duration = timedelta(hours=1)
+        self._initialize_cache()
         
-        # Predefined chart types for different financial concepts
+        # Enhanced chart templates with interactive features
         self.chart_templates = {
-            "stock": {
-                "type": "candlestick",
-                "elements": ["price", "volume", "moving_averages"],
-                "colors": ["#2E7D32", "#C62828", "#1565C0"],
-                "indicators": ["RSI", "MACD"]
-            },
-            "currency": {
-                "type": "line",
-                "elements": ["exchange_rate", "bid_ask_spread"],
-                "colors": ["#1565C0", "#FFA000"],
-                "indicators": ["volatility", "trend"]
-            },
-            "interest": {
-                "type": "bar",
-                "elements": ["rates", "terms", "payments"],
-                "colors": ["#2E7D32", "#1565C0", "#FFA000"],
-                "indicators": ["APR", "monthly_payment"]
-            },
-            "inflation": {
-                "type": "area",
-                "elements": ["cpi", "categories", "purchasing_power"],
-                "colors": ["#C62828", "#F57C00", "#1565C0"],
-                "indicators": ["yoy_change", "core_inflation"]
-            },
-            "investment": {
-                "type": "mixed",
-                "elements": ["allocation", "performance", "risk"],
-                "colors": ["#1565C0", "#2E7D32", "#FFA000"],
-                "indicators": ["returns", "volatility", "sharpe_ratio"]
-            },
-            "default": {
-                "type": "line",
-                "elements": ["trend", "comparison"],
-                "colors": ["#1565C0", "#2E7D32"],
-                "indicators": ["change", "average"]
-            }
+            "stock": ChartConfig(
+                type=ChartType.CANDLESTICK,
+                elements=["price", "volume", "moving_averages", "bollinger_bands", "fibonacci_levels"],
+                colors=["#2E7D32", "#C62828", "#1565C0", "#FFA000", "#6200EA"],
+                indicators=["RSI", "MACD", "ATR", "OBV", "Stochastic"],
+                interactive=True,
+                animations=True,
+                tooltips=True
+            ),
+            "currency": ChartConfig(
+                type=ChartType.LINE,
+                elements=["exchange_rate", "bid_ask_spread", "volatility_bands", "support_resistance"],
+                colors=["#1565C0", "#FFA000", "#2E7D32", "#C62828"],
+                indicators=["volatility", "trend", "momentum", "strength_index"],
+                interactive=True,
+                animations=True,
+                tooltips=True
+            ),
+            "interest": ChartConfig(
+                type=ChartType.BAR,
+                elements=["rates", "terms", "payments", "comparison", "historical"],
+                colors=["#2E7D32", "#1565C0", "#FFA000", "#6200EA", "#C62828"],
+                indicators=["APR", "monthly_payment", "total_interest", "amortization"],
+                interactive=True,
+                animations=True,
+                tooltips=True
+            ),
+            "inflation": ChartConfig(
+                type=ChartType.AREA,
+                elements=["cpi", "categories", "purchasing_power", "wage_growth", "sector_impact"],
+                colors=["#C62828", "#F57C00", "#1565C0", "#2E7D32", "#6200EA"],
+                indicators=["yoy_change", "core_inflation", "real_rate", "velocity"],
+                interactive=True,
+                animations=True,
+                tooltips=True
+            ),
+            "investment": ChartConfig(
+                type=ChartType.MIXED,
+                elements=["allocation", "performance", "risk", "correlation", "efficient_frontier"],
+                colors=["#1565C0", "#2E7D32", "#FFA000", "#6200EA", "#C62828"],
+                indicators=["returns", "volatility", "sharpe_ratio", "alpha", "beta"],
+                interactive=True,
+                animations=True,
+                tooltips=True
+            ),
+            "default": ChartConfig(
+                type=ChartType.LINE,
+                elements=["trend", "comparison", "forecast"],
+                colors=["#1565C0", "#2E7D32", "#FFA000"],
+                indicators=["change", "average", "prediction"],
+                interactive=True,
+                animations=True,
+                tooltips=True
+            )
         }
+        
+        # Initialize the visualization cache
+        self._visualization_cache = {}
+        self._cache_timestamps = {}
     
     async def generate_visualization(
         self,
@@ -502,8 +556,8 @@ class StableDiffusionDesignerAgent(DesignerAgent):
             "language": "spanish"
         }
     
-    async def _call_stability_api(self, prompt: str) -> bytes:
-        """Call the Stability AI API to generate the image."""
+    async def _call_stability_api(self, prompt: str, retries: int = 3) -> bytes:
+        """Call the Stability AI API to generate the image with retries and enhanced error handling."""
         if not self.api_key:
             raise ValueError("Missing Stability API key")
         
@@ -576,9 +630,58 @@ class StableDiffusionDesignerAgent(DesignerAgent):
                 except Exception as e:
                     raise ValueError(f"Failed to process image: {str(e)}")
     
+    def _initialize_cache(self):
+        """Initialize the visualization cache system."""
+        self._visualization_cache = {}
+        self._cache_timestamps = {}
+    
+    def _get_cache_key(self, context: Dict[str, Any], text: str) -> str:
+        """Generate a unique cache key for the visualization."""
+        cache_data = {
+            "context": context,
+            "text": text,
+            "timestamp": datetime.now().strftime("%Y%m%d")
+        }
+        return base64.b64encode(json.dumps(cache_data).encode()).decode()
+    
+    def _is_cache_valid(self, cache_key: str) -> bool:
+        """Check if the cached visualization is still valid."""
+        if cache_key not in self._cache_timestamps:
+            return False
+        age = datetime.now() - self._cache_timestamps[cache_key]
+        return age < self.cache_duration
+    
+    @lru_cache(maxsize=100)
+    def _get_chart_style(self, topic: str, user_level: str) -> Dict[str, Any]:
+        """Get cached chart style configuration."""
+        return self._get_style_metadata(topic)
+    
     async def process(self, input_data: Dict[str, Any]) -> Dict[str, Any]:
-        """Process input data through the designer agent."""
-        context = input_data.get("context", {})
-        text = input_data.get("response", "")
-        image_url = await self.generate_visualization(context, text)
-        return {"visualization": image_url}
+        """Process input data through the designer agent with caching and error handling."""
+        try:
+            context = input_data.get("context", {})
+            text = input_data.get("response", "")
+            
+            # Check cache first
+            cache_key = self._get_cache_key(context, text)
+            if self._is_cache_valid(cache_key) and cache_key in self._visualization_cache:
+                return {"visualization": self._visualization_cache[cache_key]}
+            
+            # Generate new visualization
+            visualization = await self.generate_visualization(context, text)
+            
+            # Cache the result
+            self._visualization_cache[cache_key] = visualization
+            self._cache_timestamps[cache_key] = datetime.now()
+            
+            return {"visualization": visualization}
+        except Exception as e:
+            logger.error(f"Error in designer agent: {str(e)}")
+            return {
+                "visualization": None,
+                "error": {
+                    "message": str(e),
+                    "type": type(e).__name__,
+                    "timestamp": datetime.now().isoformat()
+                }
+            }

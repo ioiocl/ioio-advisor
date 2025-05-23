@@ -2,7 +2,7 @@ import pytest
 import asyncio
 from datetime import datetime, timedelta
 from unittest.mock import Mock, patch
-from src.agents.retriever_agent import DataRetrieverAgent
+from src.agents.retriever_agent import InstructorXLRetrieverAgent
 
 @pytest.fixture
 def retriever_agent():
@@ -10,7 +10,7 @@ def retriever_agent():
         'ALPHA_VANTAGE_KEY': 'test_key',
         'EXCHANGERATE_API_KEY': 'test_key'
     }):
-        agent = DataRetrieverAgent()
+        agent = InstructorXLRetrieverAgent()
         return agent
 
 @pytest.mark.asyncio
@@ -65,22 +65,26 @@ async def test_educational_content(retriever_agent):
     """Test educational content retrieval and adaptation"""
     # Test for beginner level
     beginner_content = retriever_agent._get_educational_content(
-        topic="stocks",
+        main_topic="stocks",
+        subtopics=[],
         user_level="beginner"
     )
     assert isinstance(beginner_content, dict)
-    assert "concepts" in beginner_content
-    assert "examples" in beginner_content
-    assert len(beginner_content["concepts"]) > 0
+    assert "stocks" in beginner_content
+    assert "concepts" in beginner_content["stocks"]
+    assert "examples" in beginner_content["stocks"]
+    assert len(beginner_content["stocks"]["concepts"]) > 0
     
     # Test for advanced level
     advanced_content = retriever_agent._get_educational_content(
-        topic="stocks",
+        main_topic="stocks",
+        subtopics=[],
         user_level="advanced"
     )
     assert isinstance(advanced_content, dict)
-    assert "concepts" in advanced_content
-    assert advanced_content != beginner_content
+    assert "stocks" in advanced_content
+    assert "concepts" in advanced_content["stocks"]
+    assert advanced_content["stocks"] != beginner_content["stocks"]
 
 @pytest.mark.asyncio
 async def test_market_sentiment_analysis(retriever_agent):

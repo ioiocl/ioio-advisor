@@ -1,0 +1,49 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: writer-agent
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: writer-agent
+  template:
+    metadata:
+      labels:
+        app: writer-agent
+    spec:
+      containers:
+      - name: writer-agent
+        image: writer-agent:latest
+        ports:
+        - containerPort: 8000
+        env:
+        - name: REASONER_URL
+          value: http://reasoner-agent:8000
+        - name: RETRIEVER_URL
+          value: http://retriever-agent:8000
+        - name: REDIS_HOST
+          value: redis
+        - name: POSTGRES_HOST
+          value: postgres
+        - name: POSTGRES_DB
+          value: financedb
+        - name: POSTGRES_USER
+          value: financeuser
+        - name: POSTGRES_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: postgres-secret
+              key: POSTGRES_PASSWORD
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: writer-agent
+spec:
+  selector:
+    app: writer-agent
+  ports:
+    - protocol: TCP
+      port: 8000
+      targetPort: 8000

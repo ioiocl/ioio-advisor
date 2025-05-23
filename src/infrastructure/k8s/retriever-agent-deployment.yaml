@@ -1,0 +1,45 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: retriever-agent
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: retriever-agent
+  template:
+    metadata:
+      labels:
+        app: retriever-agent
+    spec:
+      containers:
+      - name: retriever-agent
+        image: retriever-agent:latest
+        ports:
+        - containerPort: 8000
+        env:
+        - name: REDIS_HOST
+          value: redis
+        - name: POSTGRES_HOST
+          value: postgres
+        - name: POSTGRES_DB
+          value: financedb
+        - name: POSTGRES_USER
+          value: financeuser
+        - name: POSTGRES_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: postgres-secret
+              key: POSTGRES_PASSWORD
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: retriever-agent
+spec:
+  selector:
+    app: retriever-agent
+  ports:
+    - protocol: TCP
+      port: 8000
+      targetPort: 8000

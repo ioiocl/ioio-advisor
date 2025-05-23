@@ -152,29 +152,29 @@ class StableDiffusionDesignerAgent(DesignerAgent):
             # Get chart configuration
             chart_config = self.chart_templates[topic]
             
-            if chart_config["type"] == "bar":
+            if chart_config.type == ChartType.BAR:
                 # Create bar chart
                 bars = ax.bar(chart_data["labels"], chart_data["data"])
                 for i, bar in enumerate(bars):
-                    bar.set_color(chart_config["colors"][i % len(chart_config["colors"])])
+                    bar.set_color(chart_config.colors[i % len(chart_config.colors)])
                 ax.set_xticklabels(chart_data["labels"], rotation=45, ha='right')
                 
-            elif chart_config["type"] == "line" or chart_config["type"] == "area":
+            elif chart_config.type == ChartType.LINE or chart_config.type == ChartType.AREA:
                 # Create line/area chart
-                if chart_config["type"] == "area":
+                if chart_config.type == ChartType.AREA:
                     ax.fill_between(range(len(chart_data["data"])), chart_data["data"],
-                                  color=chart_config["colors"][0], alpha=0.3)
+                                  color=chart_config.colors[0], alpha=0.3)
                 ax.plot(range(len(chart_data["data"])), chart_data["data"],
-                        color=chart_config["colors"][0], linewidth=2)
+                        color=chart_config.colors[0], linewidth=2)
                 if chart_data["labels"]:
                     ax.set_xticks(range(len(chart_data["labels"])))
                     ax.set_xticklabels(chart_data["labels"], rotation=45, ha='right')
             
-            elif chart_config["type"] == "mixed":
+            elif chart_config.type == ChartType.MIXED:
                 # Create combination chart
                 for i, series in enumerate(chart_data["series"]):
                     ax.plot(range(len(series["data"])), series["data"],
-                            label=series["name"], color=chart_config["colors"][i])
+                            label=series["name"], color=chart_config.colors[i])
                 ax.legend()
             
             # Add trend indicators if available
@@ -232,7 +232,7 @@ class StableDiffusionDesignerAgent(DesignerAgent):
             metadata = {
                 "topic": topic,
                 "chart": {
-                    "type": chart_config["type"],
+                    "type": chart_config.type.value,
                     "data_points": {
                         "values": len(data_points["values"]),
                         "categories": len(data_points["categories"]),
@@ -400,16 +400,16 @@ class StableDiffusionDesignerAgent(DesignerAgent):
         
         # Initialize chart data structure
         chart_data = {
-            "type": chart_config["type"],
+            "type": chart_config.type.value,
             "data": [],
             "labels": [],
             "series": [],
-            "colors": chart_config["colors"],
+            "colors": chart_config.colors,
             "indicators": {}
         }
         
         # Process data points based on chart type
-        if chart_config["type"] == "bar":
+        if chart_config.type == ChartType.BAR:
             # Use categories and their corresponding values/percentages
             for cat in data_points["categories"]:
                 chart_data["labels"].append(cat)
@@ -418,13 +418,13 @@ class StableDiffusionDesignerAgent(DesignerAgent):
                            if cat.lower() in p["context"].lower()), 0)
                 chart_data["data"].append(value)
         
-        elif chart_config["type"] == "line" or chart_config["type"] == "area":
+        elif chart_config.type == ChartType.LINE or chart_config.type == ChartType.AREA:
             # Use time series data if available
             if data_points["time_periods"]:
                 chart_data["labels"] = data_points["time_periods"]
                 chart_data["data"] = [p["value"] for p in data_points["values"]]
         
-        elif chart_config["type"] == "mixed":
+        elif chart_config.type == ChartType.MIXED:
             # Combine different types of data
             chart_data["series"] = [
                 {
@@ -438,7 +438,7 @@ class StableDiffusionDesignerAgent(DesignerAgent):
             ]
         
         # Add indicators
-        for indicator in chart_config["indicators"]:
+        for indicator in chart_config.indicators:
             if indicator == "trend":
                 chart_data["indicators"]["trend"] = [
                     t["direction"] for t in data_points["trends"]

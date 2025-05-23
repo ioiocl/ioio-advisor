@@ -1,0 +1,64 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: intention-agent
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: intention-agent
+  template:
+    metadata:
+      labels:
+        app: intention-agent
+    spec:
+      containers:
+      - name: intention-agent
+        image: <aws_account_id>.dkr.ecr.<region>.amazonaws.com/intention-agent:latest
+        ports:
+        - containerPort: 8000
+        env:
+        - name: POSTGRES_HOST
+          value: postgres
+        - name: POSTGRES_DB
+          value: financedb
+        - name: POSTGRES_USER
+          value: financeuser
+        - name: POSTGRES_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: postgres-secret
+              key: POSTGRES_PASSWORD
+        - name: OPENAI_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: api-keys
+              key: OPENAI_API_KEY
+        - name: STABILITY_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: api-keys
+              key: STABILITY_API_KEY
+        - name: REDIS_HOST
+          value: redis
+        - name: RETRIEVER_URL
+          value: http://retriever-agent:8000
+        - name: REASONER_URL
+          value: http://reasoner-agent:8000
+        - name: WRITER_URL
+          value: http://writer-agent:8000
+        - name: DESIGNER_URL
+          value: http://designer-agent:8000
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: intention-agent
+spec:
+  selector:
+    app: intention-agent
+  ports:
+    - protocol: TCP
+      port: 8000
+      targetPort: 8000
+  type: ClusterIP

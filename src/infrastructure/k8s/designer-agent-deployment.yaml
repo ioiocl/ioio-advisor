@@ -1,0 +1,47 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: designer-agent
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: designer-agent
+  template:
+    metadata:
+      labels:
+        app: designer-agent
+    spec:
+      containers:
+      - name: designer-agent
+        image: designer-agent:latest
+        ports:
+        - containerPort: 8000
+        env:
+        - name: WRITER_URL
+          value: http://writer-agent:8000
+        - name: REDIS_HOST
+          value: redis
+        - name: POSTGRES_HOST
+          value: postgres
+        - name: POSTGRES_DB
+          value: financedb
+        - name: POSTGRES_USER
+          value: financeuser
+        - name: POSTGRES_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: postgres-secret
+              key: POSTGRES_PASSWORD
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: designer-agent
+spec:
+  selector:
+    app: designer-agent
+  ports:
+    - protocol: TCP
+      port: 8000
+      targetPort: 8000

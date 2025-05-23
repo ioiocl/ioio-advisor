@@ -13,13 +13,20 @@ class Phi3IntentionAgent(IntentionAgent):
         """Initialize the agent with the Phi-3 Mini model."""
         self.model_name = os.getenv('PHI3_MODEL_PATH', 'microsoft/phi-3')
         self.hf_token = os.getenv('HUGGINGFACE_API_KEY')
-        self.tokenizer = AutoTokenizer.from_pretrained(self.model_name, use_auth_token=self.hf_token)
-        self.model = AutoModelForCausalLM.from_pretrained(
-            self.model_name,
-            use_auth_token=self.hf_token,
-            torch_dtype=torch.float16,
-            device_map="auto"
-        )
+        try:
+            self.tokenizer = AutoTokenizer.from_pretrained(self.model_name, token=self.hf_token)
+            self.model = AutoModelForCausalLM.from_pretrained(
+                self.model_name,
+                token=self.hf_token,
+                torch_dtype=torch.float16,
+                device_map="auto"
+            )
+        except Exception as e:
+            print(f"[WARNING] Could not load {self.model_name} due to: {e}. Falling back to 'gpt2'.")
+            self.model_name = 'gpt2'
+            self.tokenizer = AutoTokenizer.from_pretrained(self.model_name)
+            self.model = AutoModelForCausalLM.from_pretrained(self.model_name)
+
         
         # Pre-defined financial topics with keywords and phrases (normalized text)
         self.topic_patterns = {
@@ -60,8 +67,29 @@ class Phi3IntentionAgent(IntentionAgent):
         # Prepare model input with more context
         model_input = f"Query: {query}\nNormalized: {normalized_query}\nTopic: {main_topic}\nType: {query_type}\nSubtopics: {', '.join(subtopics)}"
         
-        # Get model prediction
-        prediction = await self.model.predict(model_input)
+        # Get model prediction using HuggingFace generate
+        import json
+        import re
+        inputs = self.tokenizer(model_input, return_tensors="pt").to(self.model.device)
+        output_ids = self.model.generate(**inputs, max_new_tokens=128)
+        output_text = self.tokenizer.decode(output_ids[0], skip_special_tokens=True)
+
+        # Try to parse output as JSON, otherwise fallback to regex or default
+        try:
+            prediction = json.loads(output_text)
+        except Exception:
+            # Fallback: try to extract topic, confidence, and query_type from output_text
+            prediction = {}
+            topic_match = re.search(r"topic\s*[:=]\s*(\w+)", output_text, re.IGNORECASE)
+            if topic_match:
+                prediction['topic'] = topic_match.group(1)
+            conf_match = re.search(r"confidence\s*[:=]\s*([0-9.]+)", output_text, re.IGNORECASE)
+            if conf_match:
+                prediction['confidence'] = float(conf_match.group(1))
+            type_match = re.search(r"query_type\s*[:=]\s*(\w+)", output_text, re.IGNORECASE)
+            if type_match:
+                prediction['query_type'] = type_match.group(1)
+
         # Validate and enhance topic detection using model output
         model_topic = prediction.get('topic', main_topic)
         if model_topic != 'unknown' and model_topic in self.topic_patterns:

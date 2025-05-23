@@ -1,6 +1,7 @@
 from typing import Dict, Any, List
 import torch
 from transformers import AutoModelForCausalLM, AutoTokenizer
+from datetime import datetime  # Ensure datetime is imported
 
 from ..ports.agent_port import ReasonAgent
 
@@ -187,10 +188,18 @@ Respuesta:"""
         """Analyze risk factors in market data."""
         risk_scores = {
             "market_volatility": self._assess_market_volatility(market_data),
-            "economic_health": self._assess_economic_health(market_data),
+            # Use fallback value if economic_health is missing or raises an error
+            "economic_health": None,
             "global_exposure": self._assess_global_exposure(market_data),
             "sector_risks": self._assess_sector_risks(market_data)
         }
+        try:
+            risk_scores["economic_health"] = self._assess_economic_health(market_data)
+            if risk_scores["economic_health"] is None:
+                raise ValueError("economic_health returned None")
+        except Exception as e:
+            print(f"Warning: Could not assess economic_health: {e}")
+            risk_scores["economic_health"] = 0.5  # Default fallback risk
         
         # Calculate overall risk score
         overall_risk = sum(

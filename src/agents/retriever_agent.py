@@ -15,11 +15,24 @@ class InstructorXLRetrieverAgent(RetrieverAgent):
     def __init__(self):
         self.model_name = "hkunlp/instructor-xl"
         self.tokenizer = AutoTokenizer.from_pretrained(self.model_name)
-        self.model = AutoModelForCausalLM.from_pretrained(
-            self.model_name,
-            torch_dtype=torch.float16,
-            device_map="auto"
-        )
+        try:
+            from transformers import AutoModelForSeq2SeqLM
+            self.model = AutoModelForSeq2SeqLM.from_pretrained(
+                self.model_name,
+                torch_dtype=torch.float16,
+                device_map="auto",
+                offload_folder="./offload"
+            )
+        except Exception as e:
+            print(f"[WARNING] Could not load InstructorXL as Seq2SeqLM: {e}. Trying CausalLM fallback.")
+            from transformers import AutoModelForCausalLM
+            self.model = AutoModelForCausalLM.from_pretrained(
+                self.model_name,
+                torch_dtype=torch.float16,
+                device_map="auto",
+                offload_folder="./offload"
+            )
+
         
         # API endpoints for financial data
         self.api_endpoints = {
@@ -146,18 +159,28 @@ class InstructorXLRetrieverAgent(RetrieverAgent):
                 }
             }
             
+        except torch.nn.modules.module.ModuleNotFoundError as e:
+            print(f"Error loading model weights: {e}")
+            print('Detailed error:', repr(e))
+            return {"information": {}, "error": str(e), "using_fallback": True}
+
+        except aiohttp.ClientError as e:
+            print(f"API or network error: {e}")
+            print('Detailed error:', repr(e))
+            return {"information": {}, "error": str(e), "using_fallback": True}
+
+        except asyncio.TimeoutError as e:
+            print(f"Timeout error: {e}")
+            print('Detailed error:', repr(e))
+            return {"information": {}, "error": str(e), "using_fallback": True}
+
         except Exception as e:
-            # Log the error and return a graceful fallback response
-            print(f"Error in retrieve_information: {str(e)}")
+            print(f"Unexpected error: {e}")
+            print('Detailed error:', repr(e))
+            # Robust fallback response
             return {
-                "information": {
-                    "market_data": self._get_fallback_data(),
-                    "educational_content": self._get_basic_educational_content(main_topic)
-                },
-                "analysis": {
-                    "error": "Lo siento, hubo un problema al obtener los datos más recientes. "
-                            "Te muestro información básica mientras resolvemos el inconveniente."
-                },
+                "information": {},
+                "error": "Lo siento, hubo un problema al obtener los datos más recientes. Te muestro información básica mientras resolvemos el inconveniente.",
                 "market_sentiment": "neutral",
                 "metadata": {
                     "error": str(e),
@@ -165,6 +188,7 @@ class InstructorXLRetrieverAgent(RetrieverAgent):
                     "using_fallback": True
                 }
             }
+
     
     def _generate_retrieval_instruction(
         self,
